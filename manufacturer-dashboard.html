@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manufacturer Dashboard - Harvest2Hotel</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <nav class="dashboard-nav">
+        <div class="logo">
+            <i class="fas fa-leaf"></i>
+            <span>Harvest2<span class="highlight">Hotel</span></span>
+        </div>
+        <div class="user-info">
+            <span id="userName"></span>
+            <button id="logoutBtn" class="btn-logout"><i class="fas fa-sign-out-alt"></i> Logout</button>
+        </div>
+    </nav>
+
+    <div class="dashboard-container">
+        <aside class="sidebar">
+            <ul>
+                <li class="active" data-tab="overview"><i class="fas fa-chart-line"></i> Overview</li>
+                <li data-tab="products"><i class="fas fa-box"></i> My Products</li>
+                <li data-tab="add-product"><i class="fas fa-plus-circle"></i> Add Product</li>
+                <li data-tab="orders"><i class="fas fa-shopping-cart"></i> Orders</li>
+                <li data-tab="monthly-report"><i class="fas fa-calendar-alt"></i> Monthly Report</li>
+            </ul>
+        </aside>
+
+        <main class="dashboard-main">
+            <!-- Overview Tab -->
+            <div id="overview" class="tab-content active">
+                <h2>Dashboard Overview</h2>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <i class="fas fa-boxes"></i>
+                        <h3 id="totalProducts">0</h3>
+                        <p>Total Products</p>
+                    </div>
+                    <div class="stat-card">
+                        <i class="fas fa-dollar-sign"></i>
+                        <h3 id="totalEarnings">₹0</h3>
+                        <p>Total Earnings</p>
+                    </div>
+                    <div class="stat-card">
+                        <i class="fas fa-truck"></i>
+                        <h3 id="totalOrders">0</h3>
+                        <p>Orders Completed</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Products Tab -->
+            <div id="products" class="tab-content">
+                <h2>My Products</h2>
+                <div id="productsList" class="products-table"></div>
+            </div>
+
+            <!-- Add Product Tab -->
+            <div id="add-product" class="tab-content">
+                <h2>Add New Product</h2>
+                <form id="addProductForm">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Product Name</label>
+                            <input type="text" id="productName" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Category</label>
+                            <select id="productCategory" required>
+                                <option value="Rice">Rice</option>
+                                <option value="Wheat">Wheat</option>
+                                <option value="Pulses">Pulses</option>
+                                <option value="Vegetables">Vegetables</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Price per KG (₹)</label>
+                            <input type="number" id="productPrice" step="0.01" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Stock (KG)</label>
+                            <input type="number" id="productStock" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Description</label>
+                        <textarea id="productDescription" rows="3"></textarea>
+                    </div>
+                    <button type="submit" class="btn-primary">Add Product</button>
+                </form>
+            </div>
+
+            <!-- Orders Tab -->
+            <div id="orders" class="tab-content">
+                <h2>Orders Received</h2>
+                <div id="ordersList" class="orders-table"></div>
+            </div>
+
+            <!-- Monthly Report Tab -->
+            <div id="monthly-report" class="tab-content">
+                <h2>Monthly Sales & Earnings Report</h2>
+                <div id="reportTable" class="report-table"></div>
+            </div>
+        </main>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script src="js/auth.js"></script>
+    <script>
+        let currentUser = null;
+        let products = [];
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            currentUser = auth.getCurrentUser();
+            if (!currentUser || currentUser.userType !== 'manufacturer') {
+                window.location.href = 'login.html';
+                return;
+            }
+
+            document.getElementById('userName').textContent = currentUser.name;
+            await loadDashboard();
+            setupEventListeners();
+        });
+
+        async function loadDashboard() {
+            await loadProducts();
+            await loadOrders();
+            await loadMonthlyReport();
+            updateStats();
+        }
+
+        async function loadProducts() {
+            try {
+                const allProducts = await api.getProducts();
+                products = allProducts.filter(p => p.manufacturer_id === currentUser.id);
+                displayProducts();
+                return products;
+            } catch (error) {
+                console.error('Failed to load products:', error);
+            }
+        }
+
+        function displayProducts() {
+            const container = document.getElementById('productsList');
+            if (!products.length) {
+                container.innerHTML = '<p>No products added yet.</p>';
+                return;
+            }
+
+            container.innerHTML = `
+                <table>
+                    <thead>
+                        <tr><th>Product</th><th>Category</th><th>Price/kg</th><th>Stock (kg)</th><th>Action</th></tr>
+                    </thead>
+                    <tbody>
+                        ${products.map(p => `
+                            <tr>
+                                <td>${p.name}</td>
+                                <td>${p.category}</td>
+                                <td>₹${p.price_per_kg}</td>
+                                <td><input type="number" id="stock-${p.id}" value="${p.stock_kg}" style="width:100px"></td>
+                                <td><button onclick="updateStock(${p.id})" class="btn-small">Update</button></td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        window.updateStock = async (productId) => {
+            const stockInput = document.getElementById(`stock-${productId}`);
+            const newStock = parseFloat(stockInput.value);
+            
+            try {
+                await api.updateProductStock(productId, newStock);
+                alert('Stock updated successfully!');
+                await loadProducts();
+            } catch (error) {
+                alert('Failed to update stock: ' + error.message);
+            }
+        };
+
+        async function loadOrders() {
+            try {
+                const allOrders = await api.getHotelOrders(); // This would need manufacturer-specific orders
+                // For demo, showing limited data
+                const container = document.getElementById('ordersList');
+                container.innerHTML = '<p>Orders will appear here when hotels purchase your products.</p>';
+            } catch (error) {
+                console.error('Failed to load orders:', error);
+            }
+        }
+
+        async function loadMonthlyReport() {
+            try {
+                const report = await api.getManufacturerReport();
+                const container = document.getElementById('reportTable');
+                
+                if (!report.length) {
+                    container.innerHTML = '<p>No sales data available yet.</p>';
+                    return;
+                }
+
+                container.innerHTML = `
+                    <table>
+                        <thead>
+                            <tr><th>Month</th><th>Total Orders</th><th>Total KG Sold</th><th>Total Earnings</th><th>Products Sold</th></tr>
+                        </thead>
+                        <tbody>
+                            ${report.map(r => `
+                                <tr>
+                                    <td>${r.month}</td>
+                                    <td>${r.total_orders}</td>
+                                    <td>${r.total_kg_sold} kg</td>
+                                    <td>₹${parseFloat(r.total_earnings).toLocaleString()}</td>
+                                    <td><small>${r.products_sold || '-'}</small></td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                `;
+            } catch (error) {
+                console.error('Failed to load report:', error);
+            }
+        }
+
+        function updateStats() {
+            const totalProducts = products.length;
+            document.getElementById('totalProducts').textContent = totalProducts;
+        }
+
+        function setupEventListeners() {
+            // Tab switching
+            document.querySelectorAll('.sidebar li').forEach(item => {
+                item.addEventListener('click', () => {
+                    const tabId = item.getAttribute('data-tab');
+                    document.querySelectorAll('.sidebar li').forEach(li => li.classList.remove('active'));
+                    document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+                    item.classList.add('active');
+                    document.getElementById(tabId).classList.add('active');
+                });
+            });
+
+            // Add product form
+            document.getElementById('addProductForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const productData = {
+                    name: document.getElementById('productName').value,
+                    category: document.getElementById('productCategory').value,
+                    price_per_kg: parseFloat(document.getElementById('productPrice').value),
+                    stock_kg: parseFloat(document.getElementById('productStock').value),
+                    description: document.getElementById('productDescription').value
+                };
+
+                try {
+                    await api.addProduct(productData);
+                    alert('Product added successfully!');
+                    document.getElementById('addProductForm').reset();
+                    await loadProducts();
+                    document.querySelector('[data-tab="products"]').click();
+                } catch (error) {
+                    alert('Failed to add product: ' + error.message);
+                }
+            });
+
+            document.getElementById('logoutBtn').addEventListener('click', () => {
+                auth.logout();
+                window.location.href = 'index.html';
+            });
+        }
+    </script>
+</body>
+</html>

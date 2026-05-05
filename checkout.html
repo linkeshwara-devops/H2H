@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Checkout - Harvest2Hotel</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <nav class="dashboard-nav">
+        <div class="logo">
+            <i class="fas fa-leaf"></i>
+            <span>Harvest2<span class="highlight">Hotel</span></span>
+        </div>
+        <div class="user-info">
+            <span id="userName"></span>
+            <button id="logoutBtn" class="btn-logout"><i class="fas fa-sign-out-alt"></i> Logout</button>
+        </div>
+    </nav>
+
+    <div class="checkout-container">
+        <h1>Checkout</h1>
+        <div class="checkout-grid">
+            <div class="order-review">
+                <h2>Order Summary</h2>
+                <div id="orderItems"></div>
+                <div class="order-total">
+                    <span>Total Amount:</span>
+                    <span id="finalTotal">₹0</span>
+                </div>
+            </div>
+            <div class="payment-section">
+                <h2>Payment Details</h2>
+                <form id="paymentForm">
+                    <div class="form-group">
+                        <label>Delivery Address</label>
+                        <textarea id="deliveryAddress" rows="3" required placeholder="Enter complete delivery address"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Payment Method</label>
+                        <select id="paymentMethod" required>
+                            <option value="bank_transfer">Bank Transfer</option>
+                            <option value="credit_card">Credit Card</option>
+                            <option value="upi">UPI</option>
+                        </select>
+                    </div>
+                    <div class="payment-demo">
+                        <p><i class="fas fa-info-circle"></i> Demo Payment Portal</p>
+                        <div class="demo-card">
+                            <p><strong>Test Payment Details:</strong></p>
+                            <p>Card: 4242 4242 4242 4242</p>
+                            <p>Expiry: 12/25 | CVV: 123</p>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn-place-order">Place Order & Pay</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/cart.js"></script>
+    <script>
+        let currentUser = null;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            currentUser = auth.getCurrentUser();
+            if (!currentUser || currentUser.userType !== 'hotel') {
+                window.location.href = 'login.html';
+                return;
+            }
+            document.getElementById('userName').textContent = currentUser.name;
+            displayOrderSummary();
+            setupEventListeners();
+        });
+
+        function displayOrderSummary() {
+            const items = cart.getItems();
+            const container = document.getElementById('orderItems');
+            let total = 0;
+            
+            container.innerHTML = items.map(item => {
+                const itemTotal = item.price * item.quantity;
+                total += itemTotal;
+                return `
+                    <div class="checkout-item">
+                        <span>${item.name} x ${item.quantity}kg</span>
+                        <span>₹${itemTotal.toFixed(2)}</span>
+                    </div>
+                `;
+            }).join('');
+            
+            document.getElementById('finalTotal').textContent = '₹' + total.toFixed(2);
+        }
+
+        async function placeOrder() {
+            const address = document.getElementById('deliveryAddress').value;
+            if (!address) {
+                alert('Please enter delivery address');
+                return;
+            }
+            
+            const items = cart.getItems();
+            const total = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+            
+            const orderData = {
+                items: items.map(item => ({
+                    product_id: item.id,
+                    product_name: item.name,
+                    quantity: item.quantity,
+                    price: item.price
+                })),
+                total_amount: total,
+                delivery_address: address,
+                hotel_name: currentUser.companyName || currentUser.name
+            };
+            
+            try {
+                await api.createOrder(orderData);
+                cart.clearCart();
+                alert('Order placed successfully!');
+                window.location.href = 'hotel-dashboard.html?tab=orders';
+            } catch (error) {
+                alert('Failed to place order: ' + error.message);
+            }
+        }
+
+        function setupEventListeners() {
+            document.getElementById('paymentForm').addEventListener('submit', (e) => {
+                e.preventDefault();
+                placeOrder();
+            });
+            
+            document.getElementById('logoutBtn').addEventListener('click', () => {
+                auth.logout();
+                window.location.href = 'index.html';
+            });
+        }
+    </script>
+</body>
+</html>

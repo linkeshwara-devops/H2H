@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hotel Dashboard - Harvest2Hotel</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <nav class="dashboard-nav">
+        <div class="logo">
+            <i class="fas fa-leaf"></i>
+            <span>Harvest2<span class="highlight">Hotel</span></span>
+        </div>
+        <div class="user-info">
+            <span id="userName"></span>
+            <a href="cart.html" class="cart-icon"><i class="fas fa-shopping-cart"></i> <span id="cartCount">0</span></a>
+            <button id="logoutBtn" class="btn-logout"><i class="fas fa-sign-out-alt"></i> Logout</button>
+        </div>
+    </nav>
+
+    <div class="dashboard-container">
+        <aside class="sidebar">
+            <ul>
+                <li class="active" data-tab="browse"><i class="fas fa-store"></i> Browse Products</li>
+                <li data-tab="orders"><i class="fas fa-history"></i> My Orders</li>
+                <li data-tab="profile"><i class="fas fa-user"></i> Profile</li>
+            </ul>
+        </aside>
+
+        <main class="dashboard-main">
+            <!-- Browse Products Tab -->
+            <div id="browse" class="tab-content active">
+                <h2>Browse Products</h2>
+                <div class="filters">
+                    <select id="categoryFilter">
+                        <option value="">All Categories</option>
+                        <option value="Rice">Rice</option>
+                        <option value="Wheat">Wheat</option>
+                        <option value="Pulses">Pulses</option>
+                        <option value="Vegetables">Vegetables</option>
+                    </select>
+                    <input type="text" id="searchInput" placeholder="Search products...">
+                </div>
+                <div id="productsGrid" class="products-grid-dashboard"></div>
+            </div>
+
+            <!-- My Orders Tab -->
+            <div id="orders" class="tab-content">
+                <h2>My Orders</h2>
+                <div id="ordersList" class="orders-list"></div>
+            </div>
+
+            <!-- Profile Tab -->
+            <div id="profile" class="tab-content">
+                <h2>Hotel Profile</h2>
+                <div class="profile-info">
+                    <p><strong>Name:</strong> <span id="profileName"></span></p>
+                    <p><strong>Email:</strong> <span id="profileEmail"></span></p>
+                    <p><strong>Company:</strong> <span id="profileCompany"></span></p>
+                    <p><strong>Phone:</strong> <span id="profilePhone"></span></p>
+                    <p><strong>Address:</strong> <span id="profileAddress"></span></p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/cart.js"></script>
+    <script>
+        let currentUser = null;
+        let allProducts = [];
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            currentUser = auth.getCurrentUser();
+            if (!currentUser || currentUser.userType !== 'hotel') {
+                window.location.href = 'login.html';
+                return;
+            }
+
+            document.getElementById('userName').textContent = currentUser.name;
+            document.getElementById('profileName').textContent = currentUser.name;
+            document.getElementById('profileEmail').textContent = currentUser.email;
+            document.getElementById('profileCompany').textContent = currentUser.companyName || 'N/A';
+            
+            await loadProducts();
+            await loadOrders();
+            updateCartCount();
+            setupEventListeners();
+        });
+
+        async function loadProducts() {
+            try {
+                allProducts = await api.getProducts();
+                displayProducts(allProducts);
+            } catch (error) {
+                console.error('Failed to load products:', error);
+            }
+        }
+
+        function displayProducts(products) {
+            const container = document.getElementById('productsGrid');
+            if (!products.length) {
+                container.innerHTML = '<p>No products found.</p>';
+                return;
+            }
+
+            container.innerHTML = products.map(product => `
+                <div class="product-card">
+                    <img src="${product.image_url || 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=300'}" alt="${product.name}">
+                    <div class="product-info">
+                        <h3>${product.name}</h3>
+                        <p class="manufacturer">${product.manufacturer_name}</p>
+                        <p class="price">₹${product.price_per_kg}/kg</p>
+                        <p class="stock">Available: ${product.stock_kg} kg</p>
+                        <div class="quantity-control">
+                            <button onclick="updateQuantity(${product.id}, -1)">-</button>
+                            <input type="number" id="qty-${product.id}" value="1" min="1" max="${product.stock_kg}">
+                            <button onclick="updateQuantity(${product.id}, 1)">+</button>
+                        </div>
+                        <button onclick="addToCart(${product.id}, '${product.name}', ${product.price_per_kg})" class="btn-add-cart">Add to Cart</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        window.updateQuantity = (productId, delta) => {
+            const input = document.getElementById(`qty-${productId}`);
+            let newVal = parseInt(input.value) + delta;
+            newVal = Math.max(1, Math.min(newVal, 1000));
+            input.value = newVal;
+        };
+
+        window.addToCart = (productId, name, price) => {
+            const qtyInput = document.getElementById(`qty-${productId}`);
+            const quantity = parseInt(qtyInput.value);
+            cart.addItem({ id: productId, name, price, quantity });
+            updateCartCount();
+            alert(`${quantity}kg of ${name} added to cart!`);
+        };
+
+        function updateCartCount() {
+            const count = cart.getTotalItems();
+            document.getElementById('cartCount').textContent = count;
+        }
+
+        async function loadOrders() {
+            try {
+                const orders = await api.getHotelOrders();
+                const container = document.getElementById('ordersList');
+                
+                if (!orders.length) {
+                    container.innerHTML = '<p>No orders placed yet.</p>';
+                    return;
+                }
+
+                container.innerHTML = orders.map(order => `
+                    <div class="order-card">
+                        <div class="order-header">
+                            <span class="order-id">Order #${order.id}</span>
+                            <span class="order-status ${order.status}">${order.status}</span>
+                        </div>
+                        <div class="order-details">
+                            <p>Date: ${new Date(order.created_at).toLocaleDateString()}</p>
+                            <p>Items: ${order.items_list}</p>
+                            <p>Total: ₹${parseFloat(order.total_amount).toLocaleString()}</p>
+                            <p>Delivery: ${order.delivery_address || 'Not specified'}</p>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Failed to load orders:', error);
+            }
+        }
+
+        function setupEventListeners() {
+            // Tab switching
+            document.querySelectorAll('.sidebar li').forEach(item => {
+                item.addEventListener('click', () => {
+                    const tabId = item.getAttribute('data-tab');
+                    document.querySelectorAll('.sidebar li').forEach(li => li.classList.remove('active'));
+                    document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+                    item.classList.add('active');
+                    document.getElementById(tabId).classList.add('active');
+                    
+                    if (tabId === 'orders') loadOrders();
+                });
+            });
+
+            // Filters
+            document.getElementById('categoryFilter').addEventListener('change', filterProducts);
+            document.getElementById('searchInput').addEventListener('input', filterProducts);
+
+            document.getElementById('logoutBtn').addEventListener('click', () => {
+                auth.logout();
+                window.location.href = 'index.html';
+            });
+        }
+
+        function filterProducts() {
+            const category = document.getElementById('categoryFilter').value;
+            const search = document.getElementById('searchInput').value.toLowerCase();
+            
+            let filtered = allProducts;
+            if (category) {
+                filtered = filtered.filter(p => p.category === category);
+            }
+            if (search) {
+                filtered = filtered.filter(p => p.name.toLowerCase().includes(search) || p.manufacturer_name.toLowerCase().includes(search));
+            }
+            displayProducts(filtered);
+        }
+    </script>
+</body>
+</html>

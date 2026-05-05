@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shopping Cart - Harvest2Hotel</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <nav class="dashboard-nav">
+        <div class="logo">
+            <i class="fas fa-leaf"></i>
+            <span>Harvest2<span class="highlight">Hotel</span></span>
+        </div>
+        <div class="user-info">
+            <span id="userName"></span>
+            <button id="logoutBtn" class="btn-logout"><i class="fas fa-sign-out-alt"></i> Logout</button>
+        </div>
+    </nav>
+
+    <div class="cart-container">
+        <h1>Shopping Cart</h1>
+        <div id="cartItems" class="cart-items"></div>
+        <div class="cart-summary">
+            <h3>Order Summary</h3>
+            <div class="summary-row">
+                <span>Total Items:</span>
+                <span id="totalItems">0</span>
+            </div>
+            <div class="summary-row">
+                <span>Total Weight:</span>
+                <span id="totalWeight">0 kg</span>
+            </div>
+            <div class="summary-row total">
+                <span>Total Amount:</span>
+                <span id="totalAmount">₹0</span>
+            </div>
+            <button id="checkoutBtn" class="btn-checkout">Proceed to Checkout</button>
+        </div>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/cart.js"></script>
+    <script>
+        let currentUser = null;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            currentUser = auth.getCurrentUser();
+            if (!currentUser || currentUser.userType !== 'hotel') {
+                window.location.href = 'login.html';
+                return;
+            }
+            document.getElementById('userName').textContent = currentUser.name;
+            displayCart();
+            setupEventListeners();
+        });
+
+        function displayCart() {
+            const items = cart.getItems();
+            const container = document.getElementById('cartItems');
+            
+            if (items.length === 0) {
+                container.innerHTML = '<div class="empty-cart"><i class="fas fa-shopping-cart"></i><p>Your cart is empty</p><a href="hotel-dashboard.html" class="btn-primary">Browse Products</a></div>';
+                document.querySelector('.cart-summary').style.display = 'none';
+                return;
+            }
+            
+            document.querySelector('.cart-summary').style.display = 'block';
+            
+            container.innerHTML = items.map((item, index) => `
+                <div class="cart-item">
+                    <div class="item-info">
+                        <h3>${item.name}</h3>
+                        <p>Price: ₹${item.price}/kg</p>
+                    </div>
+                    <div class="item-quantity">
+                        <button onclick="updateQuantity(${index}, -1)">-</button>
+                        <input type="number" id="qty-${index}" value="${item.quantity}" min="1" max="1000" onchange="updateQuantityFromInput(${index})">
+                        <button onclick="updateQuantity(${index}, 1)">+</button>
+                    </div>
+                    <div class="item-total">
+                        <span>₹${(item.price * item.quantity).toFixed(2)}</span>
+                        <button onclick="removeItem(${index})" class="remove-btn"><i class="fas fa-trash"></i></button>
+                    </div>
+                </div>
+            `).join('');
+            
+            updateSummary();
+        }
+
+        window.updateQuantity = (index, delta) => {
+            const items = cart.getItems();
+            if (items[index]) {
+                let newQty = items[index].quantity + delta;
+                newQty = Math.max(1, Math.min(newQty, 1000));
+                cart.updateQuantity(index, newQty);
+                displayCart();
+            }
+        };
+
+        window.updateQuantityFromInput = (index) => {
+            const input = document.getElementById(`qty-${index}`);
+            let newQty = parseInt(input.value);
+            newQty = Math.max(1, Math.min(newQty, 1000));
+            cart.updateQuantity(index, newQty);
+            displayCart();
+        };
+
+        window.removeItem = (index) => {
+            cart.removeItem(index);
+            displayCart();
+        };
+
+        function updateSummary() {
+            const items = cart.getItems();
+            const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
+            const totalWeight = items.reduce((sum, item) => sum + item.quantity, 0);
+            const totalAmount = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+            
+            document.getElementById('totalItems').textContent = totalItems;
+            document.getElementById('totalWeight').textContent = totalWeight + ' kg';
+            document.getElementById('totalAmount').textContent = '₹' + totalAmount.toFixed(2);
+        }
+
+        function setupEventListeners() {
+            document.getElementById('checkoutBtn').addEventListener('click', () => {
+                if (cart.getItems().length > 0) {
+                    window.location.href = 'checkout.html';
+                }
+            });
+            
+            document.getElementById('logoutBtn').addEventListener('click', () => {
+                auth.logout();
+                window.location.href = 'index.html';
+            });
+        }
+    </script>
+</body>
+</html>
